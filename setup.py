@@ -273,7 +273,7 @@ if __name__ == "__main__":
                 extras[f"cuda{toolkit}"] = [
                     f'mlx-cuda-{toolkit}=={version}; platform_system == "Linux"'
                 ]
-            extras["cpu"] = [f'mlx-cpu=={version}; platform_system == "Linux"']
+            extras["cpu"] = [f'mlx-cpu=={version}; platform_system != "Darwin"']
 
         _setup(
             name="mlx",

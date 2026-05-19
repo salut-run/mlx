@@ -1,0 +1,44 @@
+name: 'Build Windows wheel'
+description: 'Build Windows wheel'
+
+inputs:
+  build-backend:
+    description: 'Build the backend mlx-cpu package'
+    type: boolean
+    required: false
+    default: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build MLX
+      shell: cmd
+      env:
+        CMAKE_ARGS: >-
+          -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_CXX_COMPILER=cl
+          -DCMAKE_RC_COMPILER=rc
+      run: uv pip install -e . -v
+
+    - name: Build Python package (Stage 1)
+      shell: cmd
+      run: |
+        uv pip install delvewheel "build<=1.4.2" setuptools
+        python setup.py clean --all
+        set MLX_BUILD_STAGE=1
+        python -m build -w
+        :: Find the OpenBLAS DLL directory from the CMake build cache
+        for /f "delims=" %%d in ('python -c "import mlx.core; import pathlib; print(pathlib.Path(mlx.core.__file__).parent)"') do set MLX_PKG_DIR=%%d
+        delvewheel repair dist\mlx-*.whl -w wheelhouse --add-path "%MLX_PKG_DIR%"
+
+    - name: Build backend package (Stage 2)
+      if: ${{ inputs.build-backend }}
+      shell: cmd
+      run: |
+        python setup.py clean --all
+        set MLX_BUILD_STAGE=2
+        python -m build -w
+        for /f "delims=" %%d in ('python -c "import mlx.core; import pathlib; print(pathlib.Path(mlx.core.__file__).parent)"') do set MLX_PKG_DIR=%%d
+        delvewheel repair dist\mlx_cpu*.whl -w wheelhouse --add-path "%MLX_PKG_DIR%"
