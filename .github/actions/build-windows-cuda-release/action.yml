@@ -4,6 +4,16 @@ description: 'Build Windows CUDA backend wheel'
 runs:
   using: "composite"
   steps:
+    - name: Install cuDNN headers and libraries
+      shell: cmd
+      run: |
+        uv pip install nvidia-cudnn-cu12==9.*
+        :: Point CMake at cuDNN installed in the venv site-packages
+        for /f "delims=" %%d in ('python -c "import nvidia.cudnn; import pathlib; p = pathlib.Path(nvidia.cudnn.__file__).parent; print(p / \"include\")"') do set CUDNN_INCLUDE_PATH=%%d
+        for /f "delims=" %%d in ('python -c "import nvidia.cudnn; import pathlib; p = pathlib.Path(nvidia.cudnn.__file__).parent; print(p / \"lib\")"') do set CUDNN_LIBRARY_PATH=%%d
+        >>%GITHUB_ENV% echo CUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH%
+        >>%GITHUB_ENV% echo CUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH%
+
     - name: Build MLX with CUDA
       shell: cmd
       env:
@@ -28,5 +38,7 @@ runs:
           --exclude cublas64_*.dll ^
           --exclude cublasLt64_*.dll ^
           --exclude cudart64_*.dll ^
+          --exclude cudnn*.dll ^
           --exclude nvrtc64_*.dll ^
-          --exclude nvJitLink_*.dll
+          --exclude nvJitLink_*.dll ^
+          --exclude nccl*.dll

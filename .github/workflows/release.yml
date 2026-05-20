@@ -196,6 +196,7 @@ jobs:
   build_windows_cuda_release:
     if: github.repository == 'salut-run/mlx'
     strategy:
+      fail-fast: false
       matrix:
         toolkit: ['12.9.0', '13.0.0']
     runs-on: windows-2022
