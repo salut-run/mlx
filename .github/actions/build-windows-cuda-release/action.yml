@@ -8,9 +8,9 @@ runs:
       shell: cmd
       run: |
         uv pip install nvidia-cudnn-cu12==9.*
-        :: Point CMake at cuDNN installed in the venv site-packages
-        for /f "delims=" %%d in ('python -c "import nvidia.cudnn; import pathlib; p = pathlib.Path(nvidia.cudnn.__file__).parent; print(p / \"include\")"') do set CUDNN_INCLUDE_PATH=%%d
-        for /f "delims=" %%d in ('python -c "import nvidia.cudnn; import pathlib; p = pathlib.Path(nvidia.cudnn.__file__).parent; print(p / \"lib\")"') do set CUDNN_LIBRARY_PATH=%%d
+        :: Find cuDNN include/lib dirs from the installed package metadata
+        for /f "delims=" %%d in ('python -c "import importlib.metadata, pathlib; dist = importlib.metadata.distribution(\"nvidia-cudnn-cu12\"); root = pathlib.Path(dist._path).parent; inc = next(root.rglob(\"cudnn.h\"), None); print(inc.parent if inc else \"\")"') do set CUDNN_INCLUDE_PATH=%%d
+        for /f "delims=" %%d in ('python -c "import importlib.metadata, pathlib; dist = importlib.metadata.distribution(\"nvidia-cudnn-cu12\"); root = pathlib.Path(dist._path).parent; lib = next(root.rglob(\"cudnn.lib\"), None); print(lib.parent if lib else \"\")"') do set CUDNN_LIBRARY_PATH=%%d
         >>%GITHUB_ENV% echo CUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH%
         >>%GITHUB_ENV% echo CUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH%
 
