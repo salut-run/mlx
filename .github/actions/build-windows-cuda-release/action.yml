@@ -12,15 +12,9 @@ runs:
 
     - name: Build MLX with CUDA
       shell: cmd
-      env:
-        CMAKE_ARGS: >-
-          -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_COMPILER=cl
-          -DCMAKE_CXX_COMPILER=cl
-          -DCMAKE_RC_COMPILER=rc
-          -DMLX_BUILD_CUDA=ON
-      run: uv pip install -e . -v
+      run: |
+        set CMAKE_ARGS=-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_RC_COMPILER=rc -DMLX_BUILD_CUDA=ON -DCUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH% -DCUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH%
+        uv pip install -e . -v
 
     - name: Build CUDA backend package (Stage 2)
       shell: cmd
