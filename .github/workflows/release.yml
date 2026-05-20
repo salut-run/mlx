@@ -164,7 +164,7 @@ jobs:
     strategy:
       matrix:
         python_version: ["3.13", "3.14"]
-    runs-on: windows-2022
+    runs-on: blacksmith-8vcpu-windows-2025
     env:
       PYPI_RELEASE: 1
       DEV_RELEASE: ${{ inputs.dev_release && 1 || 0 }}
@@ -199,7 +199,7 @@ jobs:
       fail-fast: false
       matrix:
         toolkit: ['12.9.0', '13.0.0']
-    runs-on: windows-2022
+    runs-on: blacksmith-8vcpu-windows-2025
     env:
       PYPI_RELEASE: 1
       DEV_RELEASE: ${{ inputs.dev_release && 1 || 0 }}
