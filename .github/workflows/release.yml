@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   build_documentation:
-    if: github.repository == 'ml-explore/mlx' || github.repository == 'salut-run/mlx'
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
@@ -44,7 +44,7 @@ jobs:
         uses: actions/deploy-pages@v5
 
   build_linux_release:
-    if: github.repository == 'ml-explore/mlx' || github.repository == 'salut-run/mlx'
+    if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
         python_version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -80,7 +80,7 @@ jobs:
           if-no-files-found: error
 
   build_mac_release:
-    if: github.repository == 'ml-explore/mlx' || github.repository == 'salut-run/mlx'
+    if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -132,7 +132,7 @@ jobs:
           if-no-files-found: error
 
   build_cuda_release:
-    if: github.repository == 'ml-explore/mlx' || github.repository == 'salut-run/mlx'
+    if: github.repository == 'ml-explore/mlx'
     strategy:
       matrix:
         arch: ['x86_64', 'aarch64']
@@ -193,11 +193,13 @@ jobs:
           path: wheelhouse/mlx_cpu-*.whl
           if-no-files-found: error
 
+  # --- Upstream (ml-explore/mlx) PyPI publishing ---
+
   pypi-publish:
     name: Upload release to PyPI
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-latest
-    needs: [build_linux_release, build_mac_release, build_windows_release]
-    if: always() && (needs.build_linux_release.result == 'success' || needs.build_mac_release.result == 'success')
+    needs: [build_linux_release, build_mac_release]
     permissions:
       id-token: write
     environment:
@@ -214,12 +216,6 @@ jobs:
           pattern: mac-wheels-*
           merge-multiple: true
           path: dist
-      - uses: actions/download-artifact@v8
-        if: needs.build_windows_release.result == 'success'
-        with:
-          pattern: windows-wheels-*
-          merge-multiple: true
-          path: dist
       - name: Display structure of downloaded files
         run: du -ah dist
       - name: Publish package distributions to PyPI
@@ -230,6 +226,7 @@ jobs:
 
   pypi-publish-cuda:
     name: Upload CUDA release to PyPI
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-latest
     needs: [build_cuda_release]
     permissions:
@@ -253,9 +250,9 @@ jobs:
 
   pypi-publish-cpu:
     name: Upload CPU release to PyPI
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-latest
-    needs: [build_linux_release, build_windows_release]
-    if: always() && needs.build_linux_release.result == 'success'
+    needs: [build_linux_release]
     permissions:
       id-token: write
     environment:
@@ -277,6 +274,7 @@ jobs:
 
   pypi-publish-metal:
     name: Upload Metal release to PyPI
+    if: github.repository == 'ml-explore/mlx'
     runs-on: ubuntu-latest
     needs: [build_mac_release]
     permissions:
@@ -297,11 +295,44 @@ jobs:
         with:
           repository-url: https://upload.pypi.org/legacy/
 
+  # --- Fork (salut-run/mlx) GitHub Releases publishing ---
+
+  upload-windows-release:
+    name: Upload Windows wheels to GitHub Release
+    if: github.repository == 'salut-run/mlx' && !inputs.dry_run
+    runs-on: ubuntu-latest
+    needs: [build_windows_release]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: windows-wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: mlx-cpu-windows
+          merge-multiple: true
+          path: dist
+      - name: Display structure of downloaded files
+        run: du -ah dist
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/*.whl \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "MLX $TAG (Windows)" \
+            --notes "Windows CPU wheels for MLX. Install with: \`pip install mlx --extra-index-url https://salut-run.github.io/wheels/\`" \
+            --prerelease
+
   notify-wheels-index:
     name: Trigger wheels index update
     if: github.repository == 'salut-run/mlx' && !inputs.dry_run
     runs-on: ubuntu-latest
-    needs: [pypi-publish, pypi-publish-cpu]
+    needs: [upload-windows-release]
     permissions:
       contents: read
     steps:
