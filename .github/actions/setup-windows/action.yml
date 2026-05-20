@@ -23,10 +23,10 @@ runs:
     - name: Setup Visual Studio cmd
       shell: cmd
       run: |
-        :: Find out path to VS.
-        pushd "C:\Program Files (x86)\Microsoft Visual Studio\Installer\"
-        for /f "delims=" %%x in ('.\vswhere.exe -latest -property InstallationPath') do set VSPATH=%%x
-        popd
+        :: Find vswhere.exe — standard path or fall back to PATH lookup.
+        set "VSWHERE=C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+        if not exist "%VSWHERE%" for /f "delims=" %%w in ('where vswhere 2^>nul') do set "VSWHERE=%%w"
+        for /f "delims=" %%x in ('"%VSWHERE%" -latest -property InstallationPath') do set VSPATH=%%x
         :: Import VS vars.
         call "%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat" x64
         :: Export to all steps.
