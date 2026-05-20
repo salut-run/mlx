@@ -211,8 +211,7 @@ jobs:
       - uses: Jimver/cuda-toolkit@v0.2.35
         with:
           cuda: ${{ matrix.toolkit }}
-          method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "nvrtc", "nvrtc_dev", "nvjitlink", "nvjitlink_dev"]'
+          method: local
       - uses: ./.github/actions/build-windows-cuda-release
       - name: Upload CUDA artifacts
         uses: actions/upload-artifact@v7
