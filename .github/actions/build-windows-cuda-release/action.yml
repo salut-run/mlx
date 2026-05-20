@@ -13,7 +13,7 @@ runs:
     - name: Build MLX with CUDA
       shell: cmd
       run: |
-        set CMAKE_ARGS=-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_RC_COMPILER=rc -DMLX_BUILD_CUDA=ON -DCUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH% -DCUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH% -DMLX_CUDA_ARCHITECTURES=80;86;89;90a
+        set "CMAKE_ARGS=-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_RC_COMPILER=rc -DMLX_BUILD_CUDA=ON -DCUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH% -DCUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH% -DCMAKE_CUDA_ARCHITECTURES=80-real;86-real;89-real;90a"
         uv pip install -e . -v
 
     - name: Build CUDA backend package (Stage 2)
@@ -22,7 +22,7 @@ runs:
         uv pip install delvewheel "build<=1.4.2" setuptools
         python setup.py clean --all
         set MLX_BUILD_STAGE=2
-        set CMAKE_ARGS=-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_RC_COMPILER=rc -DMLX_BUILD_CUDA=ON -DCUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH% -DCUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH% -DMLX_CUDA_ARCHITECTURES=80;86;89;90a
+        set "CMAKE_ARGS=-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_RC_COMPILER=rc -DMLX_BUILD_CUDA=ON -DCUDNN_INCLUDE_PATH=%CUDNN_INCLUDE_PATH% -DCUDNN_LIBRARY_PATH=%CUDNN_LIBRARY_PATH% -DCMAKE_CUDA_ARCHITECTURES=80-real;86-real;89-real;90a"
         python -m build -w
         for /f "delims=" %%d in ('python -c "import mlx.core; import pathlib; print(pathlib.Path(mlx.core.__file__).parent)"') do set MLX_PKG_DIR=%%d
         delvewheel repair dist\mlx_cuda*.whl -w wheelhouse --add-path "%MLX_PKG_DIR%" ^
