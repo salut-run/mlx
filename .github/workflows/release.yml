@@ -193,6 +193,35 @@ jobs:
           path: wheelhouse/mlx_cpu-*.whl
           if-no-files-found: error
 
+  build_windows_cuda_release:
+    if: github.repository == 'salut-run/mlx'
+    strategy:
+      matrix:
+        toolkit: ['12.9.0', '13.0.0']
+    runs-on: windows-2022
+    env:
+      PYPI_RELEASE: 1
+      DEV_RELEASE: ${{ inputs.dev_release && 1 || 0 }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-windows
+        with:
+          python-version: '3.13'
+          use-ccache: false
+      - uses: Jimver/cuda-toolkit@v0.2.35
+        with:
+          cuda: ${{ matrix.toolkit }}
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "nvrtc", "nvrtc_dev", "nvjitlink", "nvjitlink_dev"]'
+      - uses: ./.github/actions/build-windows-cuda-release
+      - name: Upload CUDA artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          overwrite: true
+          name: mlx-cuda-windows-${{ matrix.toolkit }}
+          path: wheelhouse/mlx_cuda*.whl
+          if-no-files-found: error
+
   # --- Upstream (ml-explore/mlx) PyPI publishing ---
 
   pypi-publish:
@@ -299,9 +328,9 @@ jobs:
 
   upload-windows-release:
     name: Upload Windows wheels to GitHub Release
-    if: github.repository == 'salut-run/mlx' && !inputs.dry_run
+    if: always() && github.repository == 'salut-run/mlx' && !inputs.dry_run && needs.build_windows_release.result == 'success'
     runs-on: ubuntu-latest
-    needs: [build_windows_release]
+    needs: [build_windows_release, build_windows_cuda_release]
     permissions:
       contents: write
     steps:
@@ -313,6 +342,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           pattern: mlx-cpu-windows
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v8
+        if: needs.build_windows_cuda_release.result == 'success'
+        with:
+          pattern: mlx-cuda-windows-*
           merge-multiple: true
           path: dist
       - name: Display structure of downloaded files
