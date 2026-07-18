@@ -1,0 +1,95 @@
+name: Windows Blackwell CUDA smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Windows MLX release tag to test
+        required: true
+        type: string
+      cuda_major:
+        description: CUDA backend wheel
+        required: true
+        default: '12'
+        type: choice
+        options:
+          - '12'
+          - '13'
+      expected_gpu:
+        description: Expected NVIDIA GPU name
+        required: true
+        default: RTX 5070 Ti
+        type: string
+      force_ptx_jit:
+        description: Also prove that the wheel contains Blackwell-compatible PTX
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-blackwell-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: RTX 5070 Ti runtime
+    runs-on: [self-hosted, Windows, X64, cuda, blackwell]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: false
+
+      - name: Download Windows wheels
+        shell: pwsh
+        env:
+          CUDA_MAJOR: ${{ inputs.cuda_major }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            throw 'GitHub CLI is required on the self-hosted runner'
+          }
+          New-Item -ItemType Directory -Path wheelhouse -Force | Out-Null
+          $cudaPattern = "mlx_cuda_$($env:CUDA_MAJOR)-*-win_amd64.whl"
+          gh release download $env:RELEASE_TAG `
+            --repo $env:REPOSITORY `
+            --dir wheelhouse `
+            --pattern 'mlx-*-cp313-cp313-win_amd64.whl' `
+            --pattern $cudaPattern
+
+      - name: Install Windows CUDA wheels
+        shell: pwsh
+        env:
+          CUDA_MAJOR: ${{ inputs.cuda_major }}
+        run: |
+          uv venv --python 3.13 --managed-python
+          $frontend = @(Get-ChildItem wheelhouse -Filter 'mlx-*-cp313-cp313-win_amd64.whl')
+          $cudaPattern = "mlx_cuda_$($env:CUDA_MAJOR)-*-win_amd64.whl"
+          $backend = @(Get-ChildItem wheelhouse -Filter $cudaPattern)
+          if ($frontend.Count -ne 1 -or $backend.Count -ne 1) {
+            throw 'Expected exactly one frontend wheel and one CUDA backend wheel'
+          }
+          uv pip install --python .venv\Scripts\python.exe $frontend.FullName $backend.FullName
+
+      - name: Run native Blackwell kernels
+        shell: pwsh
+        env:
+          EXPECTED_GPU_NAME: ${{ inputs.expected_gpu }}
+        run: .venv\Scripts\python.exe .github\scripts\windows_cuda_smoke.py
+
+      - name: Force PTX JIT
+        if: inputs.force_ptx_jit
+        shell: pwsh
+        env:
+          CUDA_FORCE_PTX_JIT: '1'
+          EXPECTED_GPU_NAME: ${{ inputs.expected_gpu }}
+        run: .venv\Scripts\python.exe .github\scripts\windows_cuda_smoke.py
