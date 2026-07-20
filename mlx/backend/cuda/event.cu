@@ -67,8 +67,10 @@ class CudaEventPool {
 };
 
 CudaEventPool& cuda_event_pool() {
-  static CudaEventPool pool;
-  return pool;
+  // CUDA may be unloaded before static destructors run on Windows. Keep the
+  // process-wide event pool alive and let the OS reclaim it at process exit.
+  static auto* pool = new CudaEventPool;
+  return *pool;
 }
 
 } // namespace
@@ -320,8 +322,9 @@ uint32_t AtomicEvent::value() const {
 }
 
 const CudaStream& AtomicEvent::signal_stream() {
-  static CudaStream stream(device(0));
-  return stream;
+  // Keep the process-wide stream alive for the same reason as the event pool.
+  static auto* stream = new CudaStream(device(0));
+  return *stream;
 }
 
 } // namespace cu

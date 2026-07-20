@@ -7,7 +7,16 @@
 #include <delayimp.h>
 // clang-format on
 
-namespace mlx::core {
+#include <algorithm>
+#include <mutex>
+#include <system_error>
+#include <vector>
+
+namespace mlx::core::cu {
+
+// Defined in dirs.cpp to avoid invalidating compile cache.
+const char* cuda_bin_dir();
+const char* cudnn_bin_dir();
 
 namespace fs = std::filesystem;
 
@@ -15,66 +24,152 @@ inline fs::path relative_to_current_binary(const char* relative) {
   return fs::absolute(current_binary_dir() / relative);
 }
 
-inline fs::path cublas_bin_dir() {
-#if defined(MLX_CUDA_BIN_DIR)
-  return MLX_CUDA_BIN_DIR;
-#else
-  return relative_to_current_binary("../nvidia/cublas/bin");
-#endif
+inline fs::path component_dir(const char* relative) {
+  return cuda_bin_dir() ? fs::path(cuda_bin_dir())
+                        : relative_to_current_binary(relative);
+}
+
+inline fs::path cublas_dir() {
+  return component_dir("../nvidia/cublas/bin");
+}
+
+inline fs::path cufft_dir() {
+  return component_dir("../nvidia/cufft/bin");
+}
+
+inline fs::path cuda_runtime_dir() {
+  return component_dir("../nvidia/cuda_runtime/bin");
+}
+
+inline fs::path nvjitlink_dir() {
+  return component_dir("../nvidia/nvjitlink/bin");
+}
+
+void prepend_to_process_path(const fs::path& directory) {
+  static std::mutex mutex;
+  static std::vector<std::wstring> added_directories;
+  std::lock_guard lock(mutex);
+
+  const std::wstring native_directory = directory.native();
+  if (std::any_of(
+          added_directories.begin(),
+          added_directories.end(),
+          [&native_directory](const std::wstring& added) {
+            return ::CompareStringOrdinal(
+                       added.c_str(), -1, native_directory.c_str(), -1, TRUE) ==
+                CSTR_EQUAL;
+          })) {
+    return;
+  }
+
+  ::SetLastError(ERROR_SUCCESS);
+  DWORD size = ::GetEnvironmentVariableW(L"PATH", nullptr, 0);
+  std::wstring current_path;
+  if (size > 0) {
+    current_path.resize(size);
+    DWORD copied = ::GetEnvironmentVariableW(
+        L"PATH", current_path.data(), current_path.size());
+    if (copied == 0 || copied >= current_path.size()) {
+      throw std::system_error(
+          ::GetLastError(), std::system_category(), "Get PATH");
+    }
+    current_path.resize(copied);
+  } else {
+    DWORD error = ::GetLastError();
+    if (error != ERROR_SUCCESS && error != ERROR_ENVVAR_NOT_FOUND) {
+      throw std::system_error(error, std::system_category(), "Get PATH");
+    }
+  }
+
+  std::wstring updated_path = native_directory;
+  if (!current_path.empty()) {
+    updated_path.append(L";").append(current_path);
+  }
+  if (!::SetEnvironmentVariableW(L"PATH", updated_path.c_str())) {
+    throw std::system_error(
+        ::GetLastError(), std::system_category(), "Update PATH");
+  }
+  added_directories.push_back(native_directory);
+}
+
+void add_cuda_search_directories() {
+  static bool configured = []() {
+    for (const auto& directory : {
+             cublas_dir(),
+             cufft_dir(),
+             cuda_runtime_dir(),
+             nvjitlink_dir(),
+         }) {
+      if (fs::exists(directory)) {
+        ::AddDllDirectory(directory.c_str());
+        prepend_to_process_path(directory);
+      }
+    }
+    return true;
+  }();
+  (void)configured;
 }
 
 fs::path load_nvrtc() {
-#if defined(MLX_CUDA_BIN_DIR)
-  fs::path nvrtc_bin_dir = MLX_CUDA_BIN_DIR;
-#else
-  fs::path nvrtc_bin_dir =
-      relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
-#endif
-  // Internally nvrtc loads some libs dynamically, add to search dirs.
-  ::AddDllDirectory(nvrtc_bin_dir.c_str());
-  return nvrtc_bin_dir;
+  static fs::path nvrtc_dir = []() {
+    fs::path directory = cuda_bin_dir()
+        ? fs::path(cuda_bin_dir())
+        : relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
+    // Internally nvrtc loads some libs dynamically, add to search dirs.
+    add_cuda_search_directories();
+    ::AddDllDirectory(directory.c_str());
+    prepend_to_process_path(directory);
+    return directory;
+  }();
+  return nvrtc_dir;
 }
 
 fs::path load_cudnn() {
-#if defined(MLX_CUDNN_BIN_DIR)
-  fs::path cudnn_bin_dir = MLX_CUDNN_BIN_DIR;
-#else
-  fs::path cudnn_bin_dir = relative_to_current_binary("../nvidia/cudnn/bin");
-#endif
+  fs::path cudnn_dir = cudnn_bin_dir()
+      ? fs::path(cudnn_bin_dir())
+      : relative_to_current_binary("../nvidia/cudnn/bin");
+  // cuDNN loads its sublibraries with LoadLibrary, which searches PATH.
+  prepend_to_process_path(cudnn_dir);
+  load_nvrtc();
+  ::AddDllDirectory(cudnn_dir.c_str());
   // Must load cudnn_graph64_9.dll before locating symbols, otherwise We would
   // get errors like "Invalid handle. Cannot load symbol cudnnCreate".
-  for (const auto& dll : fs::directory_iterator(cudnn_bin_dir)) {
+  for (const auto& dll : fs::directory_iterator(cudnn_dir)) {
     if (dll.path().filename().string().starts_with("cudnn_graph") &&
         dll.path().extension() == ".dll") {
       ::LoadLibraryW(dll.path().c_str());
       break;
     }
   }
-  // Internally cuDNN loads some libs dynamically, add to search dirs.
-  load_nvrtc();
-  ::AddDllDirectory(cudnn_bin_dir.c_str());
-  ::AddDllDirectory(cublas_bin_dir().c_str());
-  return cudnn_bin_dir;
+  return cudnn_dir;
 }
 
 // Called by system when failed to locate a lazy-loaded DLL.
 FARPROC WINAPI delayload_helper(unsigned dliNotify, PDelayLoadInfo pdli) {
   HMODULE mod = NULL;
   if (dliNotify == dliNotePreLoadLibrary) {
+    add_cuda_search_directories();
     std::string dll = pdli->szDll;
     if (dll.starts_with("cudnn")) {
-      static auto cudnn_bin_dir = load_cudnn();
-      mod = ::LoadLibraryW((cudnn_bin_dir / dll).c_str());
+      static auto cudnn_dir = load_cudnn();
+      mod = ::LoadLibraryW((cudnn_dir / dll).c_str());
     } else if (dll.starts_with("cublas")) {
-      mod = ::LoadLibraryW((cublas_bin_dir() / dll).c_str());
+      mod = ::LoadLibraryW((cublas_dir() / dll).c_str());
+    } else if (dll.starts_with("cufft")) {
+      mod = ::LoadLibraryW((cufft_dir() / dll).c_str());
+    } else if (dll.starts_with("cudart")) {
+      mod = ::LoadLibraryW((cuda_runtime_dir() / dll).c_str());
+    } else if (dll.starts_with("nvJitLink")) {
+      mod = ::LoadLibraryW((nvjitlink_dir() / dll).c_str());
     } else if (dll.starts_with("nvrtc")) {
-      static auto nvrtc_bin_dir = load_nvrtc();
-      mod = ::LoadLibraryW((nvrtc_bin_dir / dll).c_str());
+      static auto nvrtc_dir = load_nvrtc();
+      mod = ::LoadLibraryW((nvrtc_dir / dll).c_str());
     }
   }
   return reinterpret_cast<FARPROC>(mod);
 }
 
-} // namespace mlx::core
+} // namespace mlx::core::cu
 
-extern "C" const PfnDliHook __pfnDliNotifyHook2 = mlx::core::delayload_helper;
+extern "C" const PfnDliHook __pfnDliNotifyHook2 =
+    mlx::core::cu::delayload_helper;

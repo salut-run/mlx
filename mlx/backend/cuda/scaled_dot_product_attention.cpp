@@ -12,6 +12,8 @@ namespace mlx::core {
 
 namespace {
 
+thread_local bool sdpa_caches_initialized = false;
+
 array prepare_sdpa_input(const array& x, Stream s) {
   // SDPA kernel's requirements on inputs:
   // 1. last dim's stride be 1;
@@ -178,12 +180,14 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
 auto& sdpa_cache() {
   static thread_local LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
       "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 256);
+  sdpa_caches_initialized = true;
   return cache;
 }
 
 auto& sdpa_backward_cache() {
   static thread_local LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
       "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 64);
+  sdpa_caches_initialized = true;
   return cache;
 }
 
@@ -310,6 +314,14 @@ DnnGraph build_sdpa_backward_graph(
 void init_cudnn_sdpa_cache() {
   sdpa_cache();
   sdpa_backward_cache();
+}
+
+void clear_cudnn_sdpa_cache() {
+  if (sdpa_caches_initialized) {
+    sdpa_cache().clear();
+    sdpa_backward_cache().clear();
+    sdpa_caches_initialized = false;
+  }
 }
 
 bool supports_sdpa_cudnn(

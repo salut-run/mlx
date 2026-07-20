@@ -13,6 +13,8 @@ namespace {
     return ret;                       \
   }
 
+thread_local bool cudnn_handles_cache_initialized = false;
+
 // In MLX a singleton dim (shape[dim] == 1) can have any stride, but in cuDNN
 // whether a tensor is contiguous is determined with:
 // shape[dim] == shape[dim + 1] * strides[dim + 1]
@@ -58,6 +60,7 @@ auto& cudnn_handles_cache() {
     cudnnHandle_t handle{nullptr};
   };
   static thread_local std::vector<CudnnHandle> cache(gpu::device_count());
+  cudnn_handles_cache_initialized = true;
   return cache;
 }
 
@@ -88,6 +91,13 @@ cudnnHandle_t get_cudnn_handle(cu::Device& device) {
 
 void init_cudnn_handles_cache() {
   cudnn_handles_cache();
+}
+
+void clear_cudnn_handles_cache() {
+  if (cudnn_handles_cache_initialized) {
+    cudnn_handles_cache().clear();
+    cudnn_handles_cache_initialized = false;
+  }
 }
 
 fe::error_t DnnGraph::prepare() {

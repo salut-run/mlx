@@ -41,6 +41,8 @@ cublasLtMatrixLayout_t create_matrix_layout(
 
 namespace {
 
+thread_local bool cublas_handles_cache_initialized = false;
+
 auto& cublas_handles_cache() {
   struct CublasHandles {
     ~CublasHandles() {
@@ -53,6 +55,7 @@ auto& cublas_handles_cache() {
     cublasLtMatmulPreference_t pref{nullptr};
   };
   static thread_local std::vector<CublasHandles> cache(gpu::device_count());
+  cublas_handles_cache_initialized = true;
   return cache;
 }
 
@@ -90,6 +93,13 @@ void check_cublas_error(const char* name, cublasStatus_t err) {
 
 void init_cublas_handles_cache() {
   cublas_handles_cache();
+}
+
+void clear_cublas_handles_cache() {
+  if (cublas_handles_cache_initialized) {
+    cublas_handles_cache().clear();
+    cublas_handles_cache_initialized = false;
+  }
 }
 
 CublasMatmulBase::~CublasMatmulBase() {
