@@ -189,11 +189,14 @@ if(WIN32)
     target_sources(
       mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/delayload.cpp>)
   endif()
-  # Get all the CUDA DLLs we could link with.
-  file(
-    GLOB CUDA_DLL_NAMES
-    RELATIVE "${CUDAToolkit_BIN_DIR}/x64"
-    "${CUDAToolkit_BIN_DIR}/x64/*.dll")
+  # Get all the CUDA DLLs we could link with. Recent toolkits place DLLs
+  # directly in bin; older layouts used bin/x64.
+  file(GLOB CUDA_DLL_PATHS "${CUDAToolkit_BIN_DIR}/*.dll"
+       "${CUDAToolkit_BIN_DIR}/x64/*.dll")
+  foreach(CUDA_DLL_PATH ${CUDA_DLL_PATHS})
+    get_filename_component(CUDA_DLL_NAME "${CUDA_DLL_PATH}" NAME)
+    list(APPEND CUDA_DLL_NAMES "${CUDA_DLL_NAME}")
+  endforeach()
   # Delay load CUDA and cuDNN libs.
   foreach(CUDA_DLL ${CUDA_DLL_NAMES} ${CUDNN_DLL_NAMES})
     target_link_options(mlx PUBLIC "/DELAYLOAD:${CUDA_DLL}")

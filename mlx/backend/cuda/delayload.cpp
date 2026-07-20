@@ -19,9 +19,42 @@ inline fs::path relative_to_current_binary(const char* relative) {
   return fs::absolute(current_binary_dir() / relative);
 }
 
-inline fs::path cublas_dir() {
+inline fs::path component_dir(const char* relative) {
   return cuda_bin_dir() ? fs::path(cuda_bin_dir())
-                        : relative_to_current_binary("../nvidia/cublas/bin");
+                        : relative_to_current_binary(relative);
+}
+
+inline fs::path cublas_dir() {
+  return component_dir("../nvidia/cublas/bin");
+}
+
+inline fs::path cufft_dir() {
+  return component_dir("../nvidia/cufft/bin");
+}
+
+inline fs::path cuda_runtime_dir() {
+  return component_dir("../nvidia/cuda_runtime/bin");
+}
+
+inline fs::path nvjitlink_dir() {
+  return component_dir("../nvidia/nvjitlink/bin");
+}
+
+void add_cuda_search_directories() {
+  static bool configured = []() {
+    for (const auto& directory : {
+             cublas_dir(),
+             cufft_dir(),
+             cuda_runtime_dir(),
+             nvjitlink_dir(),
+         }) {
+      if (fs::exists(directory)) {
+        ::AddDllDirectory(directory.c_str());
+      }
+    }
+    return true;
+  }();
+  (void)configured;
 }
 
 fs::path load_nvrtc() {
@@ -29,6 +62,7 @@ fs::path load_nvrtc() {
       ? fs::path(cuda_bin_dir())
       : relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
   // Internally nvrtc loads some libs dynamically, add to search dirs.
+  add_cuda_search_directories();
   ::AddDllDirectory(nvrtc_dir.c_str());
   return nvrtc_dir;
 }
@@ -57,12 +91,19 @@ fs::path load_cudnn() {
 FARPROC WINAPI delayload_helper(unsigned dliNotify, PDelayLoadInfo pdli) {
   HMODULE mod = NULL;
   if (dliNotify == dliNotePreLoadLibrary) {
+    add_cuda_search_directories();
     std::string dll = pdli->szDll;
     if (dll.starts_with("cudnn")) {
       static auto cudnn_dir = load_cudnn();
       mod = ::LoadLibraryW((cudnn_dir / dll).c_str());
     } else if (dll.starts_with("cublas")) {
       mod = ::LoadLibraryW((cublas_dir() / dll).c_str());
+    } else if (dll.starts_with("cufft")) {
+      mod = ::LoadLibraryW((cufft_dir() / dll).c_str());
+    } else if (dll.starts_with("cudart")) {
+      mod = ::LoadLibraryW((cuda_runtime_dir() / dll).c_str());
+    } else if (dll.starts_with("nvJitLink")) {
+      mod = ::LoadLibraryW((nvjitlink_dir() / dll).c_str());
     } else if (dll.starts_with("nvrtc")) {
       static auto nvrtc_dir = load_nvrtc();
       mod = ::LoadLibraryW((nvrtc_dir / dll).c_str());

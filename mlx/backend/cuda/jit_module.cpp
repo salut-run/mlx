@@ -36,7 +36,8 @@ const std::filesystem::path& default_cuda_toolkit_path() {
   static auto cached_path = []() -> std::filesystem::path {
     std::filesystem::path root(
         LR"(C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA)");
-    for (auto& file : std::filesystem::directory_iterator(root)) {
+    std::error_code error;
+    for (auto& file : std::filesystem::directory_iterator(root, error)) {
       if (std::filesystem::exists(file.path() / "include" / "cuda.h")) {
         return file.path();
       }
