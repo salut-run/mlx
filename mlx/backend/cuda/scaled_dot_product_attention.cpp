@@ -176,15 +176,17 @@ inline BytesKey<SDPACacheKey> build_sdpa_cache_key(
 }
 
 auto& sdpa_cache() {
-  static thread_local LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
-      "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 256);
-  return cache;
+  static thread_local auto* cache =
+      new LRUBytesKeyCache<SDPACacheKey, DnnGraph>(
+          "MLX_CUDA_SDPA_CACHE_SIZE", /* default_capacity */ 256);
+  return *cache;
 }
 
 auto& sdpa_backward_cache() {
-  static thread_local LRUBytesKeyCache<SDPACacheKey, DnnGraph> cache(
-      "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 64);
-  return cache;
+  static thread_local auto* cache =
+      new LRUBytesKeyCache<SDPACacheKey, DnnGraph>(
+          "MLX_CUDA_SDPA_BACKWARD_CACHE_SIZE", /* default_capacity */ 64);
+  return *cache;
 }
 
 enum UIDS {

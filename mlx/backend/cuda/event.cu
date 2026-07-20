@@ -67,8 +67,10 @@ class CudaEventPool {
 };
 
 CudaEventPool& cuda_event_pool() {
-  static CudaEventPool pool;
-  return pool;
+  // CUDA may be unloaded before static destructors run on Windows. Keep the
+  // process-wide event pool alive and let the OS reclaim it at process exit.
+  static auto* pool = new CudaEventPool;
+  return *pool;
 }
 
 } // namespace

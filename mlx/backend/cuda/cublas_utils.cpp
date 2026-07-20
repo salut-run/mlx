@@ -52,8 +52,10 @@ auto& cublas_handles_cache() {
     cublasLtHandle_t handle{nullptr};
     cublasLtMatmulPreference_t pref{nullptr};
   };
-  static thread_local std::vector<CublasHandles> cache(gpu::device_count());
-  return cache;
+  // CUDA DLL teardown can precede thread-local destruction on Windows.
+  static thread_local auto* cache =
+      new std::vector<CublasHandles>(gpu::device_count());
+  return *cache;
 }
 
 auto get_cublas_handles(cu::Device& device) {

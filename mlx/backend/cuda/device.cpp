@@ -578,13 +578,15 @@ CommandEncoder& get_command_encoder(Stream s) {
 }
 
 std::unordered_map<int, CommandEncoder>& get_command_encoders() {
-  static thread_local std::unordered_map<int, CommandEncoder> encoders;
-  return encoders;
+  // CUDA may be unloaded before thread-local destructors run on Windows.
+  static thread_local auto* encoders =
+      new std::unordered_map<int, CommandEncoder>;
+  return *encoders;
 }
 
 std::unordered_map<int, CommandEncoder>& get_global_command_encoders() {
-  static std::unordered_map<int, CommandEncoder> encoders;
-  return encoders;
+  static auto* encoders = new std::unordered_map<int, CommandEncoder>;
+  return *encoders;
 }
 
 } // namespace mlx::core::cu

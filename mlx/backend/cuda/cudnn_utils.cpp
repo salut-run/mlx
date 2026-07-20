@@ -57,8 +57,10 @@ auto& cudnn_handles_cache() {
     }
     cudnnHandle_t handle{nullptr};
   };
-  static thread_local std::vector<CudnnHandle> cache(gpu::device_count());
-  return cache;
+  // CUDA DLL teardown can precede thread-local destruction on Windows.
+  static thread_local auto* cache =
+      new std::vector<CudnnHandle>(gpu::device_count());
+  return *cache;
 }
 
 } // namespace

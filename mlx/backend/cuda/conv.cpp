@@ -39,11 +39,12 @@ struct ConvCacheKey {
 };
 
 auto& conv_cache() {
-  static thread_local LRUBytesKeyCache<
+  using Cache = LRUBytesKeyCache<
       ConvCacheKey,
-      std::pair<ConvBackendType, std::optional<DnnGraph>>>
-      cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
-  return cache;
+      std::pair<ConvBackendType, std::optional<DnnGraph>>>;
+  static thread_local auto* cache =
+      new Cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
+  return *cache;
 }
 
 auto get_conv_settings(
