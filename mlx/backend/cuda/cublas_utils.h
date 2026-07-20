@@ -45,6 +45,7 @@ void check_cublas_error(const char* name, cublasStatus_t err);
 #define CHECK_CUBLAS_ERROR(cmd) check_cublas_error(#cmd, (cmd))
 
 void init_cublas_handles_cache();
+void clear_cublas_handles_cache();
 
 class CublasMatmulBase {
  public:

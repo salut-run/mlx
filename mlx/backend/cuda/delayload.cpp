@@ -7,6 +7,8 @@
 #include <delayimp.h>
 // clang-format on
 
+#include <system_error>
+
 namespace mlx::core::cu {
 
 // Defined in dirs.cpp to avoid invalidating compile cache.
@@ -40,6 +42,36 @@ inline fs::path nvjitlink_dir() {
   return component_dir("../nvidia/nvjitlink/bin");
 }
 
+void prepend_to_process_path(const fs::path& directory) {
+  ::SetLastError(ERROR_SUCCESS);
+  DWORD size = ::GetEnvironmentVariableW(L"PATH", nullptr, 0);
+  std::wstring current_path;
+  if (size > 0) {
+    current_path.resize(size);
+    DWORD copied = ::GetEnvironmentVariableW(
+        L"PATH", current_path.data(), current_path.size());
+    if (copied == 0 || copied >= current_path.size()) {
+      throw std::system_error(
+          ::GetLastError(), std::system_category(), "Get PATH");
+    }
+    current_path.resize(copied);
+  } else {
+    DWORD error = ::GetLastError();
+    if (error != ERROR_SUCCESS && error != ERROR_ENVVAR_NOT_FOUND) {
+      throw std::system_error(error, std::system_category(), "Get PATH");
+    }
+  }
+
+  std::wstring updated_path = directory.native();
+  if (!current_path.empty()) {
+    updated_path.append(L";").append(current_path);
+  }
+  if (!::SetEnvironmentVariableW(L"PATH", updated_path.c_str())) {
+    throw std::system_error(
+        ::GetLastError(), std::system_category(), "Update PATH");
+  }
+}
+
 void add_cuda_search_directories() {
   static bool configured = []() {
     for (const auto& directory : {
@@ -71,6 +103,8 @@ fs::path load_cudnn() {
   fs::path cudnn_dir = cudnn_bin_dir()
       ? fs::path(cudnn_bin_dir())
       : relative_to_current_binary("../nvidia/cudnn/bin");
+  // cuDNN loads its sublibraries with LoadLibrary, which searches PATH.
+  prepend_to_process_path(cudnn_dir);
   // Must load cudnn_graph64_9.dll before locating symbols, otherwise We would
   // get errors like "Invalid handle. Cannot load symbol cudnnCreate".
   for (const auto& dll : fs::directory_iterator(cudnn_dir)) {

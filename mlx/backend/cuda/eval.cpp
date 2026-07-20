@@ -3,6 +3,7 @@
 #include "mlx/backend/gpu/eval.h"
 #include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/cublas_utils.h"
+#include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/cuda/cudnn_utils.h"
 #include "mlx/backend/cuda/event.h"
 #include "mlx/primitives.h"
@@ -94,3 +95,14 @@ void clear_streams() {
 }
 
 } // namespace mlx::core::gpu
+
+namespace mlx::core::cu {
+
+void shutdown() {
+  clear_cudnn_sdpa_cache();
+  clear_cudnn_conv_cache();
+  clear_cudnn_handles_cache();
+  clear_cublas_handles_cache();
+}
+
+} // namespace mlx::core::cu

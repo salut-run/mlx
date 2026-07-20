@@ -15,6 +15,8 @@ namespace mlx::core {
 
 namespace {
 
+thread_local bool conv_cache_initialized = false;
+
 enum ConvBackendType {
   CONV_FALLBACK,
   CONV_FORWARD,
@@ -43,6 +45,7 @@ auto& conv_cache() {
       ConvCacheKey,
       std::pair<ConvBackendType, std::optional<DnnGraph>>>
       cache("MLX_CUDA_CONV_CACHE_SIZE", /* default_capacity */ 128);
+  conv_cache_initialized = true;
   return cache;
 }
 
@@ -254,6 +257,13 @@ void register_args(
 
 void init_cudnn_conv_cache() {
   conv_cache();
+}
+
+void clear_cudnn_conv_cache() {
+  if (conv_cache_initialized) {
+    conv_cache().clear();
+    conv_cache_initialized = false;
+  }
 }
 
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {

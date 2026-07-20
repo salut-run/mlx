@@ -11,6 +11,8 @@ bool is_available() {
   return false;
 }
 
+void shutdown() {}
+
 } // namespace cu
 
 namespace fast {

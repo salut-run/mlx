@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 
 #include "mlx/backend/cuda/cuda.h"
+#include "mlx/stream.h"
 
 namespace mx = mlx::core;
 namespace nb = nanobind;
@@ -16,4 +17,12 @@ void init_cuda(nb::module_& m) {
       R"pbdoc(
       Check if the CUDA back-end is available.
       )pbdoc");
+
+#ifdef _WIN32
+  auto atexit = nb::module_::import_("atexit");
+  atexit.attr("register")(nb::cpp_function([]() {
+    mx::clear_streams();
+    mx::cu::shutdown();
+  }));
+#endif
 }
