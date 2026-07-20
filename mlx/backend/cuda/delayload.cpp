@@ -7,7 +7,10 @@
 #include <delayimp.h>
 // clang-format on
 
+#include <algorithm>
+#include <mutex>
 #include <system_error>
+#include <vector>
 
 namespace mlx::core::cu {
 
@@ -43,6 +46,22 @@ inline fs::path nvjitlink_dir() {
 }
 
 void prepend_to_process_path(const fs::path& directory) {
+  static std::mutex mutex;
+  static std::vector<std::wstring> added_directories;
+  std::lock_guard lock(mutex);
+
+  const std::wstring native_directory = directory.native();
+  if (std::any_of(
+          added_directories.begin(),
+          added_directories.end(),
+          [&native_directory](const std::wstring& added) {
+            return ::CompareStringOrdinal(
+                       added.c_str(), -1, native_directory.c_str(), -1, TRUE) ==
+                CSTR_EQUAL;
+          })) {
+    return;
+  }
+
   ::SetLastError(ERROR_SUCCESS);
   DWORD size = ::GetEnvironmentVariableW(L"PATH", nullptr, 0);
   std::wstring current_path;
@@ -62,7 +81,7 @@ void prepend_to_process_path(const fs::path& directory) {
     }
   }
 
-  std::wstring updated_path = directory.native();
+  std::wstring updated_path = native_directory;
   if (!current_path.empty()) {
     updated_path.append(L";").append(current_path);
   }
@@ -70,6 +89,7 @@ void prepend_to_process_path(const fs::path& directory) {
     throw std::system_error(
         ::GetLastError(), std::system_category(), "Update PATH");
   }
+  added_directories.push_back(native_directory);
 }
 
 void add_cuda_search_directories() {
@@ -82,6 +102,7 @@ void add_cuda_search_directories() {
          }) {
       if (fs::exists(directory)) {
         ::AddDllDirectory(directory.c_str());
+        prepend_to_process_path(directory);
       }
     }
     return true;
@@ -90,12 +111,16 @@ void add_cuda_search_directories() {
 }
 
 fs::path load_nvrtc() {
-  fs::path nvrtc_dir = cuda_bin_dir()
-      ? fs::path(cuda_bin_dir())
-      : relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
-  // Internally nvrtc loads some libs dynamically, add to search dirs.
-  add_cuda_search_directories();
-  ::AddDllDirectory(nvrtc_dir.c_str());
+  static fs::path nvrtc_dir = []() {
+    fs::path directory = cuda_bin_dir()
+        ? fs::path(cuda_bin_dir())
+        : relative_to_current_binary("../nvidia/cuda_nvrtc/bin");
+    // Internally nvrtc loads some libs dynamically, add to search dirs.
+    add_cuda_search_directories();
+    ::AddDllDirectory(directory.c_str());
+    prepend_to_process_path(directory);
+    return directory;
+  }();
   return nvrtc_dir;
 }
 
@@ -105,6 +130,8 @@ fs::path load_cudnn() {
       : relative_to_current_binary("../nvidia/cudnn/bin");
   // cuDNN loads its sublibraries with LoadLibrary, which searches PATH.
   prepend_to_process_path(cudnn_dir);
+  load_nvrtc();
+  ::AddDllDirectory(cudnn_dir.c_str());
   // Must load cudnn_graph64_9.dll before locating symbols, otherwise We would
   // get errors like "Invalid handle. Cannot load symbol cudnnCreate".
   for (const auto& dll : fs::directory_iterator(cudnn_dir)) {
@@ -114,10 +141,6 @@ fs::path load_cudnn() {
       break;
     }
   }
-  // Internally cuDNN loads some libs dynamically, add to search dirs.
-  load_nvrtc();
-  ::AddDllDirectory(cudnn_dir.c_str());
-  ::AddDllDirectory(cublas_dir().c_str());
   return cudnn_dir;
 }
 
