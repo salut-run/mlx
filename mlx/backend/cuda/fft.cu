@@ -87,11 +87,10 @@ struct OrderedArray {
 };
 
 auto& fft_plan_cache() {
-  static auto* cache =
-      new LRUBytesKeyCache<FFTPlanKey, std::shared_ptr<CuFFTPlan>>(
-          "MLX_CUDA_FFT_CACHE_SIZE",
-          /* default_capacity */ 128);
-  return *cache;
+  static LRUBytesKeyCache<FFTPlanKey, std::shared_ptr<CuFFTPlan>> cache(
+      "MLX_CUDA_FFT_CACHE_SIZE",
+      /* default_capacity */ 128);
+  return cache;
 }
 
 FFTPlanKey make_plan_key(

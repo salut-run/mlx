@@ -80,6 +80,10 @@ jobs:
           }
           uv pip install --python .venv\Scripts\python.exe $frontend.FullName $backend.FullName
 
+      - name: Verify clean CUDA process exit
+        shell: pwsh
+        run: .venv\Scripts\python.exe -c "import mlx.core as mx; value = mx.zeros(1); mx.eval(value); print(value)"
+
       - name: Run native Blackwell kernels
         shell: pwsh
         env:

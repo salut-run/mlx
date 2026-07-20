@@ -322,8 +322,9 @@ uint32_t AtomicEvent::value() const {
 }
 
 const CudaStream& AtomicEvent::signal_stream() {
-  static CudaStream stream(device(0));
-  return stream;
+  // Keep the process-wide stream alive for the same reason as the event pool.
+  static auto* stream = new CudaStream(device(0));
+  return *stream;
 }
 
 } // namespace cu
