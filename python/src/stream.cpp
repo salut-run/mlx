@@ -196,4 +196,10 @@ void init_stream(nb::module_& m) {
            then the default stream of the default device is used.
            Default: ``None``.
       )pbdoc");
+
+#ifdef _WIN32
+  // Destroy stream encoders before Windows unloads the CUDA backend DLL.
+  auto atexit = nb::module_::import_("atexit");
+  atexit.attr("register")(nb::cpp_function(&mx::clear_streams));
+#endif
 }
