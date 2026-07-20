@@ -203,8 +203,13 @@ if(WIN32)
   endforeach()
   # Pass the locations where CUDA DLLs are placed.
   if(NOT MLX_LOAD_CUDA_LIBS_FROM_PYTHON)
+    if(EXISTS "${CUDAToolkit_BIN_DIR}/x64")
+      set(MLX_CUDA_RUNTIME_DIR "${CUDAToolkit_BIN_DIR}/x64")
+    else()
+      set(MLX_CUDA_RUNTIME_DIR "${CUDAToolkit_BIN_DIR}")
+    endif()
     target_compile_definitions(
-      mlx_dirs PRIVATE MLX_CUDA_BIN_DIR="${CUDAToolkit_BIN_DIR}/x64"
+      mlx_dirs PRIVATE MLX_CUDA_BIN_DIR="${MLX_CUDA_RUNTIME_DIR}"
                        MLX_CUDNN_BIN_DIR="${CUDNN_BIN_DIR}")
   endif()
 else()

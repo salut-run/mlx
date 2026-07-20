@@ -422,7 +422,7 @@ jobs:
           gh release create "$TAG" dist/*.whl \
             --repo "$GITHUB_REPOSITORY" \
             --title "MLX $TAG (Windows)" \
-            --notes "Windows CPU and CUDA wheels for MLX. Install with: \`pip install 'mlx[cuda12]' --extra-index-url https://salut-run.github.io/wheels/\`" \
+            --notes "Windows CPU and CUDA wheels for MLX. Install with: \`pip install 'mlx[cuda12]' --extra-index-url https://wheels.salut.run/\`" \
             --prerelease
 
   notify-wheels-index:
